@@ -1,0 +1,26 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.18;
+
+import {AggregatorV3Interface} from
+    "lib/chainlink-brownie-contracts/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
+
+library PriceConverter {
+    uint256 private constant ADDITIONAL_FEED_PRECISION = 1e10;
+    uint256 private constant PRECISION = 1e18;
+
+    function _getPrice(AggregatorV3Interface _priceFeed) internal view returns (uint256) {
+        (, int256 answer,,,) = _priceFeed.latestRoundData();
+        return uint256(answer) * ADDITIONAL_FEED_PRECISION;
+    }
+
+    function _getConversionRate(uint256 _amount, AggregatorV3Interface _priceFeed) internal view returns (uint256) {
+        uint256 tokenPrice = _getPrice(_priceFeed);
+        uint256 tokenAmountInUsd = (tokenPrice * _amount) / PRECISION;
+
+        return tokenAmountInUsd;
+    }
+
+    function _convertToPrecisionValue(uint256 _value) internal pure returns (uint256) {
+        return _value * PRECISION;
+    }
+}
