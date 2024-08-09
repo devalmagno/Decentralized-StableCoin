@@ -216,4 +216,8 @@ contract DSCEngine is ReentrancyGuard {
         AggregatorV3Interface priceFeed = AggregatorV3Interface(s_priceFeeds[_token]);
         return _amount._getConversionRate(priceFeed);
     }
+
+    function getCollateralTokenAddress(uint256 _index) public view returns (address) {
+        return s_collateralTokens[_index];
+    }
 }
