@@ -10,6 +10,7 @@ library PriceConverter {
 
     function _getPrice(AggregatorV3Interface _priceFeed) internal view returns (uint256) {
         (, int256 answer,,,) = _priceFeed.latestRoundData();
+        // $2000e8 * 1e10
         return uint256(answer) * ADDITIONAL_FEED_PRECISION;
     }
 
@@ -21,6 +22,13 @@ library PriceConverter {
     }
 
     function _convertToPrecisionValue(uint256 _value) internal pure returns (uint256) {
+        // $value * 1e18
         return _value * PRECISION;
+    }
+
+    function _convertUsdToEth(uint256 _usdAmount, AggregatorV3Interface _priceFeed) internal view returns (uint256) {
+        uint256 price = _getPrice(_priceFeed);
+        uint256 usdAmountWithPrecision = _convertToPrecisionValue(_usdAmount);
+        return usdAmountWithPrecision / price;
     }
 }

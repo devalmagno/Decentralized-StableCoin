@@ -7,18 +7,18 @@ import {DecentralizedStableCoin} from "src/DecentralizedStableCoin.sol";
 import {HelperConfig} from "script/HelperConfig.s.sol";
 
 contract DeployDSC is Script {
-    address[] public tokenAddresses;
-    address[] public priceFeedAddresses;
+    address[] public s_tokenAddresses;
+    address[] public s_priceFeedAddresses;
 
     function run() external returns (DecentralizedStableCoin, DSCEngine, HelperConfig) {
         HelperConfig config = new HelperConfig();
         (address weth, address wbtc, address wethPriceFeed, address wbtcPriceFeed) = config.activeNetworkConfig();
-        tokenAddresses = [weth, wbtc];
-        priceFeedAddresses = [wethPriceFeed, wbtcPriceFeed];
+        s_tokenAddresses = [weth, wbtc];
+        s_priceFeedAddresses = [wethPriceFeed, wbtcPriceFeed];
 
         vm.startBroadcast();
         DecentralizedStableCoin dsc = new DecentralizedStableCoin();
-        DSCEngine engine = new DSCEngine(tokenAddresses, priceFeedAddresses, address(dsc));
+        DSCEngine engine = new DSCEngine(s_tokenAddresses, s_priceFeedAddresses, address(dsc));
 
         dsc.transferOwnership(address(engine));
         vm.stopBroadcast();
