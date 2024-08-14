@@ -23,10 +23,13 @@ contract DSCEngineTest is Test {
 
     address private constant USER = address(1);
     uint256 private constant AMOUNT_COLLATERAL = 10 ether;
+    uint256 private constant AMOUNT_TO_MINT_IN_WETH = 5 ether;
     uint256 private constant STARTING_ERC20_BALANCE = 10 ether;
 
     address private s_ethUsdPriceFeed;
     address private s_weth;
+    uint256 private s_amountDscToMintInUsd; // 5 ether in usd
+    uint256 private s_collateralValueInUsd; // 10 ether in usd
 
     modifier approved() {
         vm.prank(USER);
@@ -40,11 +43,19 @@ contract DSCEngineTest is Test {
         _;
     }
 
+    modifier minted() {
+        vm.prank(USER);
+        engine.mintDsc(s_amountDscToMintInUsd);
+        _;
+    }
+
     function setUp() public {
         deployer = new DeployDSC();
         (dsc, engine, config) = deployer.run();
         (s_weth,, s_ethUsdPriceFeed,) = config.activeNetworkConfig();
         ERC20Mock(s_weth).mint(USER, AMOUNT_COLLATERAL);
+        s_amountDscToMintInUsd = engine.getUsdValue(s_weth, AMOUNT_TO_MINT_IN_WETH);
+        s_collateralValueInUsd = engine.getUsdValue(s_weth, AMOUNT_COLLATERAL);
     }
 
     //////////////////////////////////////
@@ -126,12 +137,28 @@ contract DSCEngineTest is Test {
         engine.mintDsc(0);
     }
 
-    // function testMintDscRevertsIfHealthFactorIsBroken() public approved deposited {
-    //     uint256 amountDscToMint = engine.getUsdValue(s_weth, AMOUNT_COLLATERAL * 10); // 10 ether * 10 = 100 ether
-    //     vm.prank(USER);
-    //     vm.expectRevert(
-    //         abi.encodeWithSelector(DSCEngine__BreaksHealthFactor.selector, )
-    //     );
-    //     engine.mintDsc(amountDscToMint); // It will fail because amount to mint needs to be 25% less than the amount of collateral deposited by the user in USD
-    // }
+    function testMintDscRevertsIfHealthFactorIsBroken() public approved deposited {
+        uint256 amountDscToMintInWeth = AMOUNT_TO_MINT_IN_WETH * 0.1 ether; // 5 ether + 0.1 = 5.1 ether
+        uint256 amountDscToMintInUsd = engine.getUsdValue(s_weth, amountDscToMintInWeth);
+        uint256 amountCollateralInUsd = engine.getUsdValue(s_weth, AMOUNT_COLLATERAL);
+        uint256 expectedHealthFactor = engine.calculateHealthFactor(amountDscToMintInUsd, amountCollateralInUsd);
+
+        vm.prank(USER);
+        vm.expectRevert(abi.encodeWithSelector(DSCEngine__BreaksHealthFactor.selector, expectedHealthFactor));
+        engine.mintDsc(amountDscToMintInUsd); // It will fail because amount to mint needs to be 50% lower than the amount of collateral deposited by the user in USD
+    }
+
+    function testUserCanMintDsc() public approved deposited minted {
+        (uint256 totalDscMinted,) = engine.getAccountInformation(USER);
+        assertEq(totalDscMinted, s_amountDscToMintInUsd);
+    }
+
+    //////////////////////////////////////
+    // depositCollateralAndMintDsc Tests//
+    //////////////////////////////////////
+    function testDepositCollateralAndMintDsc() public approved deposited minted {
+        (uint256 totalDscMinted, uint256 collateralValueInUsd) = engine.getAccountInformation(USER);
+        assertEq(totalDscMinted, s_amountDscToMintInUsd);
+        assertEq(collateralValueInUsd, s_collateralValueInUsd);
+    }
 }

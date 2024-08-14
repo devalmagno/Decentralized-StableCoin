@@ -76,7 +76,7 @@ contract DSCEngine is ReentrancyGuard {
     uint256 private constant LIQUIDATION_PRECISION = 100;
     uint256 private constant MIN_HEALTH_FACTOR = 1e18;
 
-    DecentralizedStableCoin private immutable i_dsc;
+    DecentralizedStableCoin public immutable i_dsc;
 
     mapping(address token => address priceFeed) private s_priceFeeds;
     mapping(address user => mapping(address token => uint256 amount)) private s_collateralDeposited;
@@ -248,6 +248,16 @@ contract DSCEngine is ReentrancyGuard {
     /**
      * @dev Low-level internal function, do not call unless the function calling it is checking for health factors being broken
      */
+    function _calculateHealthFactor(uint256 _totalDscMinted, uint256 _collateralValueInUsd)
+        internal
+        pure
+        returns (uint256)
+    {
+        if (_totalDscMinted == 0) return type(uint256).max;
+        uint256 collateralAdjustedForThreshold = (_collateralValueInUsd * LIQUIDATION_THRESHOLD) / LIQUIDATION_PRECISION;
+        return collateralAdjustedForThreshold._convertToPrecisionValue() / _totalDscMinted;
+    }
+
     function _burnDsc(uint256 _amountDscToBurn, address _onBehalfOf, address _dscFrom) private {
         s_DSCMinted[_onBehalfOf] -= _amountDscToBurn;
         bool sucess = i_dsc.transferFrom(_dscFrom, address(this), _amountDscToBurn);
@@ -288,9 +298,7 @@ contract DSCEngine is ReentrancyGuard {
         // total DSC minted
         // total collateral VALUE
         (uint256 totalDscMinted, uint256 collateralValueInUsd) = _getAccountInformation(user);
-        uint256 collateralAdjustedForThreshold = (collateralValueInUsd * LIQUIDATION_THRESHOLD) / LIQUIDATION_PRECISION;
-
-        return collateralAdjustedForThreshold._convertToPrecisionValue() / totalDscMinted;
+        return _calculateHealthFactor(totalDscMinted, collateralValueInUsd);
     }
 
     // 1. Check health factor (do they have enough collateral?)
@@ -334,5 +342,15 @@ contract DSCEngine is ReentrancyGuard {
         (totalDscMinted, collateralValueInUsd) = _getAccountInformation(_user);
     }
 
-    function getHealthFactor(address _user, uint256 amountOfDscToMint) external view returns (uint256) {}
+    function calculateHealthFactor(uint256 _totalDscMinted, uint256 _collateralValueInUsd)
+        external
+        pure
+        returns (uint256)
+    {
+        return _calculateHealthFactor(_totalDscMinted, _collateralValueInUsd);
+    }
+
+    function getCollateralTokens() external view returns (address[] memory) {
+        return s_collateralTokens;
+    }
 }
