@@ -25,6 +25,7 @@ contract DSCEngineTest is Test {
     uint256 private constant AMOUNT_COLLATERAL = 10 ether;
     uint256 private constant AMOUNT_TO_MINT_IN_WETH = 5 ether;
     uint256 private constant STARTING_ERC20_BALANCE = 10 ether;
+    uint256 private constant PRECISION = 1e18;
 
     address private s_ethUsdPriceFeed;
     address private s_weth;
@@ -84,9 +85,9 @@ contract DSCEngineTest is Test {
     }
 
     function testGetTokenAmountFromUsd() public view {
-        uint256 usdAmount = 100 ether;
+        uint256 usdAmount = 100e18; // $100 in USD * PRECISION
         uint256 ethPriceInUsd = engine.getUsdValue(s_weth, 1 ether);
-        uint256 expectedWeth = (usdAmount * 1e18) / ethPriceInUsd;
+        uint256 expectedWeth = (usdAmount * PRECISION) / ethPriceInUsd;
         uint256 actualWeth = engine.getTokenAmountFromUsd(s_weth, usdAmount);
         assertEq(expectedWeth, actualWeth);
     }
@@ -160,5 +161,14 @@ contract DSCEngineTest is Test {
         (uint256 totalDscMinted, uint256 collateralValueInUsd) = engine.getAccountInformation(USER);
         assertEq(totalDscMinted, s_amountDscToMintInUsd);
         assertEq(collateralValueInUsd, s_collateralValueInUsd);
+    }
+
+    //////////////////////////////////////
+    // redeemCollateral Tests           //
+    //////////////////////////////////////
+    function testRedeemCollateralRevertsIfAmountIsZero() public {
+        vm.prank(USER);
+        vm.expectRevert(DSCEngine__NeedsMoreThanZero.selector);
+        engine.redeemCollateral(s_weth, 0);
     }
 }

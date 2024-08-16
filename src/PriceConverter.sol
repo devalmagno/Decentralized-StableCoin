@@ -27,8 +27,9 @@ library PriceConverter {
     }
 
     function _convertUsdToEth(uint256 _usdAmount, AggregatorV3Interface _priceFeed) internal view returns (uint256) {
+        _usdAmount = _convertToPrecisionValue(_usdAmount);
         uint256 price = _getPrice(_priceFeed);
-        uint256 usdAmountWithPrecision = _convertToPrecisionValue(_usdAmount);
-        return usdAmountWithPrecision / price;
+        uint256 rate = _usdAmount / price;
+        return rate;
     }
 }
