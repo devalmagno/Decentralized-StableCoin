@@ -23,7 +23,7 @@ contract DSCEngineTest is Test {
 
     address private constant USER = address(1);
     uint256 private constant AMOUNT_COLLATERAL = 10 ether;
-    uint256 private constant AMOUNT_TO_MINT_IN_WETH = 5 ether;
+    uint256 private constant AMOUNT_TO_MINT_IN_WETH = 2 ether;
     uint256 private constant STARTING_ERC20_BALANCE = 10 ether;
     uint256 private constant PRECISION = 1e18;
 
@@ -31,6 +31,7 @@ contract DSCEngineTest is Test {
     address private s_weth;
     uint256 private s_amountDscToMintInUsd; // 5 ether in usd
     uint256 private s_collateralValueInUsd; // 10 ether in usd
+    uint256 private s_expectedHealthFactor; // 10 ether in usd
 
     modifier approved() {
         vm.prank(USER);
@@ -57,6 +58,7 @@ contract DSCEngineTest is Test {
         ERC20Mock(s_weth).mint(USER, AMOUNT_COLLATERAL);
         s_amountDscToMintInUsd = engine.getUsdValue(s_weth, AMOUNT_TO_MINT_IN_WETH);
         s_collateralValueInUsd = engine.getUsdValue(s_weth, AMOUNT_COLLATERAL);
+        s_expectedHealthFactor = engine.getUsdValue(s_weth, AMOUNT_COLLATERAL);
     }
 
     //////////////////////////////////////
@@ -139,7 +141,7 @@ contract DSCEngineTest is Test {
     }
 
     function testMintDscRevertsIfHealthFactorIsBroken() public approved deposited {
-        uint256 amountDscToMintInWeth = AMOUNT_TO_MINT_IN_WETH * 0.1 ether; // 5 ether + 0.1 = 5.1 ether
+        uint256 amountDscToMintInWeth = AMOUNT_TO_MINT_IN_WETH * 3.1 ether; // 2 ether + 3.1 = 5.1 ether
         uint256 amountDscToMintInUsd = engine.getUsdValue(s_weth, amountDscToMintInWeth);
         uint256 amountCollateralInUsd = engine.getUsdValue(s_weth, AMOUNT_COLLATERAL);
         uint256 expectedHealthFactor = engine.calculateHealthFactor(amountDscToMintInUsd, amountCollateralInUsd);
@@ -166,9 +168,47 @@ contract DSCEngineTest is Test {
     //////////////////////////////////////
     // redeemCollateral Tests           //
     //////////////////////////////////////
-    function testRedeemCollateralRevertsIfAmountIsZero() public {
+    function testRedeemCollateralRevertsWhenAmountIsZero() public {
         vm.prank(USER);
         vm.expectRevert(DSCEngine__NeedsMoreThanZero.selector);
         engine.redeemCollateral(s_weth, 0);
+    }
+
+    function testUserCanRedeemCollateralWhenDSCBalanceIsZero() public approved deposited {
+        uint256 totalDSCMinted = engine.getDSCBalanceOfUser(USER);
+        uint256 startingCollateralBalance = engine.getCollateralBalanceOfUser(USER, s_weth);
+
+        vm.prank(USER);
+        engine.redeemCollateral(s_weth, AMOUNT_COLLATERAL);
+        uint256 endingCollateralBalance = engine.getCollateralBalanceOfUser(USER, s_weth);
+
+        assertEq(totalDSCMinted, 0);
+        assert(startingCollateralBalance > endingCollateralBalance);
+    }
+
+    function testRedeemCollateralRevertsWhenHealthFactorIsBroken() public approved deposited minted {
+        uint256 totalDscMinted = engine.getDSCBalanceOfUser(USER);
+        uint256 expectedHealthFactor = engine.calculateHealthFactor(totalDscMinted, 0); // Redeeming all of the collateral will result in collateralValueInUsd = 0, so healthFactor = 0
+
+        vm.prank(USER);
+        vm.expectRevert(abi.encodeWithSelector(DSCEngine__BreaksHealthFactor.selector, expectedHealthFactor));
+        engine.redeemCollateral(s_weth, AMOUNT_COLLATERAL);
+    }
+
+    function testUserCanRedeemCollateralWhenDscBalanceIsNotZero() public approved deposited minted {
+        uint256 totalDscMinted = engine.getDSCBalanceOfUser(USER);
+        uint256 totalDscMintedInWeth = engine.getTokenAmountFromUsd(s_weth, totalDscMinted);
+        uint256 startingWethCollateralBalance = engine.getCollateralBalanceOfUser(USER, s_weth);
+        uint256 amountToRedeem = (startingWethCollateralBalance / 2) - totalDscMintedInWeth;
+        uint256 expectedWethCollateralBalance = startingWethCollateralBalance - amountToRedeem;
+        console.log("amountToRedeem: ", amountToRedeem);
+        console.log("startingWethCollateralBalance: ", startingWethCollateralBalance);
+        console.log("Total DSC Minted in WETH: ", totalDscMintedInWeth);
+
+        vm.prank(USER);
+        engine.redeemCollateral(s_weth, amountToRedeem);
+        uint256 endingWethCollateralBalance = engine.getCollateralBalanceOfUser(USER, s_weth);
+
+        assertEq(endingWethCollateralBalance, expectedWethCollateralBalance);
     }
 }

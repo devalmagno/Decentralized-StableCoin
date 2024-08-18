@@ -4,7 +4,7 @@ pragma solidity ^0.8.18;
 // 1. The total supply of DSC should be less than the total value of collateral
 // 2. Getter view functions should never revert <- evergreen invariant
 
-import {Test} from "forge-std/Test.sol";
+import {Test, console} from "forge-std/Test.sol";
 import {StdInvariant} from "forge-std/StdInvariant.sol";
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 
@@ -36,12 +36,32 @@ contract InvariantTest is StdInvariant, Test {
         // get the value of all the collateral in the protocol
         // compare it to all the debt (dsc);
         uint256 totalSupply = dsc.totalSupply();
+        uint256 timesMintIsCalled = handler.timesMintIsCalled();
+        uint256 timesRedeemIsCalled = handler.timesRedeemIsCalled();
         uint256 totalWethDeposited = IERC20(weth).balanceOf(address(engine));
         uint256 totalWbtcDeposited = IERC20(wbtc).balanceOf(address(engine));
 
         uint256 wethValue = engine.getUsdValue(weth, totalWethDeposited);
         uint256 wbtcValue = engine.getUsdValue(wbtc, totalWbtcDeposited);
         uint256 totalValue = wethValue + wbtcValue;
+        console.log("weth value: ", wethValue);
+        console.log("wbtc value: ", wbtcValue);
+        console.log("total supply: ", totalSupply);
+        console.log("times minted is called: ", timesMintIsCalled);
+        console.log("times redeemed is called: ", timesRedeemIsCalled);
         assert(totalValue >= totalSupply);
+    }
+
+    function invariant__gettersShouldNotRevert() public view {
+        engine.getAccountCollateralValue(msg.sender);
+        engine.getAccountInformation(msg.sender);
+        engine.getCollateralBalanceOfUser(msg.sender, weth);
+        engine.getCollateralBalanceOfUser(msg.sender, wbtc);
+        engine.getCollateralTokens();
+        engine.getDSCBalanceOfUser(msg.sender);
+        engine.getTokenAmountFromUsd(weth, 1);
+        engine.getUsdValue(weth, 1);
+        engine.getPriceFeed(address(weth));
+        engine.getPriceFeed(address(wbtc));
     }
 }

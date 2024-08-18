@@ -24,7 +24,7 @@
 pragma solidity ^0.8.18;
 
 import {DecentralizedStableCoin} from "src/DecentralizedStableCoin.sol";
-import {PriceConverter} from "src/PriceConverter.sol";
+import {PriceConverter} from "src/libraries/PriceConverter.sol";
 import {ReentrancyGuard} from "lib/openzeppelin-contracts/contracts/utils/ReentrancyGuard.sol";
 import {IERC20} from "lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {AggregatorV3Interface} from
@@ -64,8 +64,9 @@ contract DSCEngine is ReentrancyGuard {
     error DSCEngine__TransferFailed();
     error DSCEngine__BreaksHealthFactor(uint256 _healthFactor);
     error DSCEngine__MintFailed();
-    error DSCEngine_HealthFactorOk();
-    error DSCEngine_HealthFactorNotImproved();
+    error DSCEngine__HealthFactorOk();
+    error DSCEngine__HealthFactorNotImproved();
+    error DSCEngine__UserHasNoCollateral();
 
     //////////////////////////////////////
     // State Variables                  //
@@ -158,6 +159,7 @@ contract DSCEngine is ReentrancyGuard {
         nonReentrant
     {
         s_collateralDeposited[msg.sender][_tokenCollateralAddress] += _amountCollateral;
+        console.log("Amount deposited: ", s_collateralDeposited[msg.sender][_tokenCollateralAddress]);
         emit CollateralDeposited(msg.sender, _tokenCollateralAddress, _amountCollateral);
         bool sucess = IERC20(_tokenCollateralAddress).transferFrom(msg.sender, address(this), _amountCollateral);
         if (!sucess) {
@@ -226,7 +228,7 @@ contract DSCEngine is ReentrancyGuard {
     {
         uint256 startingUserHealthFactor = _healthFactor(_user);
         if (startingUserHealthFactor < MIN_HEALTH_FACTOR) {
-            revert DSCEngine_HealthFactorOk();
+            revert DSCEngine__HealthFactorOk();
         }
 
         uint256 tokenAmountFromDebtCovered = getTokenAmountFromUsd(_colateral, _debtToCover);
@@ -237,7 +239,7 @@ contract DSCEngine is ReentrancyGuard {
 
         uint256 endingUserHealthFactor = _healthFactor(_user);
         if (endingUserHealthFactor <= startingUserHealthFactor) {
-            revert DSCEngine_HealthFactorNotImproved();
+            revert DSCEngine__HealthFactorNotImproved();
         }
         _revertIfHealthFactorIsBroken(msg.sender);
     }
@@ -272,6 +274,9 @@ contract DSCEngine is ReentrancyGuard {
     function _redeemCollateral(address _from, address _to, address _tokenCollateralAddress, uint256 _amountCollateral)
         private
     {
+        if (s_collateralDeposited[_from][_tokenCollateralAddress] == 0) {
+            revert DSCEngine__UserHasNoCollateral();
+        }
         s_collateralDeposited[msg.sender][_tokenCollateralAddress] -= _amountCollateral;
         emit CollateralRedeemed(_from, _to, _tokenCollateralAddress, _amountCollateral);
 
@@ -356,5 +361,13 @@ contract DSCEngine is ReentrancyGuard {
 
     function getCollateralBalanceOfUser(address _user, address _token) external view returns (uint256) {
         return s_collateralDeposited[_user][_token];
+    }
+
+    function getDSCBalanceOfUser(address _user) external view returns (uint256) {
+        return s_DSCMinted[_user];
+    }
+
+    function getPriceFeed(address _token) external view returns (address) {
+        return s_priceFeeds[_token];
     }
 }

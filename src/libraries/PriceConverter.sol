@@ -3,13 +3,16 @@ pragma solidity ^0.8.18;
 
 import {AggregatorV3Interface} from
     "lib/chainlink-brownie-contracts/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
+import {OracleLib} from "src/libraries/OracleLib.sol";
 
 library PriceConverter {
+    using OracleLib for AggregatorV3Interface;
+
     uint256 private constant ADDITIONAL_FEED_PRECISION = 1e10;
     uint256 private constant PRECISION = 1e18;
 
     function _getPrice(AggregatorV3Interface _priceFeed) internal view returns (uint256) {
-        (, int256 answer,,,) = _priceFeed.latestRoundData();
+        (, int256 answer,,,) = _priceFeed.staleCheckLastestRoundData();
         // $2000e8 * 1e10
         return uint256(answer) * ADDITIONAL_FEED_PRECISION;
     }
