@@ -63,5 +63,6 @@ contract InvariantTest is StdInvariant, Test {
         engine.getUsdValue(weth, 1);
         engine.getPriceFeed(address(weth));
         engine.getPriceFeed(address(wbtc));
+        engine.getUserHealthFactor(msg.sender);
     }
 }

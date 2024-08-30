@@ -34,8 +34,8 @@ contract Handler is Test {
 
     function mintDsc(uint256 _amountDsc, uint256 _addressSeed) public {
         if (usersWithcollateralDeposited.length == 0) return;
+        address sender = _getSender(_addressSeed);
 
-        address sender = usersWithcollateralDeposited[_addressSeed % usersWithcollateralDeposited.length];
         (uint256 totalDscMinted, uint256 collateralValueInUsd) = engine.getAccountInformation(sender);
         int256 maxTotalDscToMint = (int256(collateralValueInUsd) / 2) - int256(totalDscMinted);
         if (maxTotalDscToMint <= 0) return;
@@ -64,17 +64,17 @@ contract Handler is Test {
 
     function redeemCollateral(uint256 _collateralSeed, uint256 _amountCollateral, uint256 _addressSeed) public {
         if (usersWithcollateralDeposited.length == 0) return;
+        address sender = _getSender(_addressSeed);
 
-        address sender = usersWithcollateralDeposited[_addressSeed % usersWithcollateralDeposited.length];
         ERC20Mock collateralToRedeem = _getCollateralFromSeed(_collateralSeed);
 
-        uint256 redeemedCollateralDeposited = engine.getCollateralBalanceOfUser(sender, address(collateralToRedeem));
-        if (redeemedCollateralDeposited == 0) {
+        uint256 totalCollateralDeposited = engine.getCollateralBalanceOfUser(sender, address(collateralToRedeem));
+        if (totalCollateralDeposited == 0) {
             return;
         }
 
-        uint256 redeemedCollateralDepositedInUsd =
-            engine.getUsdValue(address(collateralToRedeem), redeemedCollateralDeposited);
+        uint256 totalCollateralDepositedInUsd =
+            engine.getUsdValue(address(collateralToRedeem), totalCollateralDeposited);
         uint256 maxCollateralValue = engine.getAccountCollateralValue(sender);
 
         uint256 totalDscMinted = engine.getDSCBalanceOfUser(sender);
@@ -83,8 +83,8 @@ contract Handler is Test {
 
         if (maxCollateralToRedeem == 0) {
             return;
-        } else if (maxCollateralToRedeem > redeemedCollateralDepositedInUsd) {
-            maxCollateralToRedeem = redeemedCollateralDepositedInUsd;
+        } else if (maxCollateralToRedeem > totalCollateralDepositedInUsd) {
+            maxCollateralToRedeem = totalCollateralDepositedInUsd;
         }
 
         uint256 maxCollateral = engine.getTokenAmountFromUsd(address(collateralToRedeem), maxCollateralToRedeem);
@@ -97,6 +97,24 @@ contract Handler is Test {
 
         vm.prank(sender);
         engine.redeemCollateral(address(collateralToRedeem), _amountCollateral);
+    }
+
+    function depositCollateralAndMintDsc(uint256 _collateralSeed, uint256 _amountCollateral, uint256 _amountDscToMint)
+        public
+    {
+        ERC20Mock collateral = _getCollateralFromSeed(_collateralSeed);
+
+        _amountCollateral = bound(_amountCollateral, 1, MAX_DEPOSIT_SIZE);
+        uint256 amountCollateralInUsd = engine.getUsdValue(address(collateral), _amountCollateral);
+
+        uint256 maxAmountToMint = amountCollateralInUsd / 2;
+        _amountDscToMint = bound(_amountDscToMint, 1, maxAmountToMint);
+
+        vm.startPrank(msg.sender);
+        collateral.mint(msg.sender, _amountCollateral);
+        collateral.approve(address(engine), _amountCollateral);
+        engine.depositCollateralAndMintDsc(address(collateral), _amountCollateral, _amountDscToMint);
+        vm.stopPrank();
     }
 
     // This breaks our invariant test suite!!!
@@ -112,5 +130,9 @@ contract Handler is Test {
             return weth;
         }
         return wbtc;
+    }
+
+    function _getSender(uint256 _addressSeed) private view returns (address sender) {
+        sender = usersWithcollateralDeposited[_addressSeed % usersWithcollateralDeposited.length];
     }
 }

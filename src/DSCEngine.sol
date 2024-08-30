@@ -173,9 +173,11 @@ contract DSCEngine is ReentrancyGuard {
      * @param _amountDscToBurn The amount of DSC to burn
      * @notice This function burns DSC and redeems underlying collateral in one transaction
      */
-    function redeemCollateralForDsc(address _tokenCollateralAddress, uint256 _amountCollateral, uint56 _amountDscToBurn)
-        external
-    {
+    function redeemCollateralForDsc(
+        address _tokenCollateralAddress,
+        uint256 _amountCollateral,
+        uint256 _amountDscToBurn
+    ) external {
         burnDsc(_amountDscToBurn);
         redeemCollateral(_tokenCollateralAddress, _amountCollateral);
     }
@@ -226,16 +228,28 @@ contract DSCEngine is ReentrancyGuard {
         moreThanZero(_debtToCover)
         nonReentrant
     {
+        // need to check health factor of the user before liquidation
         uint256 startingUserHealthFactor = _healthFactor(_user);
-        if (startingUserHealthFactor < MIN_HEALTH_FACTOR) {
+        if (startingUserHealthFactor >= MIN_HEALTH_FACTOR) {
             revert DSCEngine__HealthFactorOk();
         }
 
+        // We want to burn their DSC "debt"
+        // And take their collateral.
+        // Bad user: $140 ETH, $100 DSC
+        // _debtToCover = $100
         uint256 tokenAmountFromDebtCovered = getTokenAmountFromUsd(_colateral, _debtToCover);
+        // And give them a 10% bonus
+        // So we are giving the liquidator $110 of WETH for 100 DSC
+        // We should implement a feature to liquidate in the event the protocol is insolvent
+        // And sweep extra amounts into a treasury
         uint256 bonusCollateral = (tokenAmountFromDebtCovered * LIQUIDATION_BONUS) / LIQUIDATION_PRECISION;
         uint256 totalCollateralToRedeem = tokenAmountFromDebtCovered + bonusCollateral;
-        _redeemCollateral(_user, msg.sender, _colateral, totalCollateralToRedeem);
+        console.log("totalCollateralToRedeem: ", totalCollateralToRedeem);
+        console.log("collateralInBalance: ", s_collateralDeposited[_user][_colateral]);
+        console.log("Passou");
         _burnDsc(_debtToCover, _user, msg.sender);
+        _redeemCollateral(_user, msg.sender, _colateral, totalCollateralToRedeem);
 
         uint256 endingUserHealthFactor = _healthFactor(_user);
         if (endingUserHealthFactor <= startingUserHealthFactor) {
@@ -263,6 +277,7 @@ contract DSCEngine is ReentrancyGuard {
     function _burnDsc(uint256 _amountDscToBurn, address _onBehalfOf, address _dscFrom) private {
         s_DSCMinted[_onBehalfOf] -= _amountDscToBurn;
         bool sucess = i_dsc.transferFrom(_dscFrom, address(this), _amountDscToBurn);
+        console.log("chegou aqui");
         // This conditional is hypothetically unreachable
         if (!sucess) {
             revert DSCEngine__TransferFailed();
@@ -369,5 +384,9 @@ contract DSCEngine is ReentrancyGuard {
 
     function getPriceFeed(address _token) external view returns (address) {
         return s_priceFeeds[_token];
+    }
+
+    function getUserHealthFactor(address _user) external view returns (uint256) {
+        return _healthFactor(_user);
     }
 }

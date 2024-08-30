@@ -8,6 +8,7 @@ import {DeployDSC} from "script/DeployDSC.s.sol";
 import {HelperConfig} from "script/HelperConfig.s.sol";
 import {ERC20Mock} from "test/mocks/ERC20Mock.sol";
 import {IERC20} from "lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import {MockV3Aggregator} from "test/mocks/MockV3Aggregator.sol";
 
 contract DSCEngineTest is Test {
     error DSCEngine__NeedsMoreThanZero();
@@ -15,6 +16,8 @@ contract DSCEngineTest is Test {
     error DSCEngine__TransferFailed();
     error DSCEngine__BreaksHealthFactor(uint256 _healthFactor);
     error DSCEngine__TokenAddressesAndPriceFeedAddressesMustBeSameLength();
+    error DSCEngine__HealthFactorOk();
+    error DSCEngine__HealthFactorNotImproved();
 
     DeployDSC public deployer;
     DecentralizedStableCoin public dsc;
@@ -27,9 +30,11 @@ contract DSCEngineTest is Test {
     uint256 private constant STARTING_ERC20_BALANCE = 10 ether;
     uint256 private constant PRECISION = 1e18;
 
-    address private s_ethUsdPriceFeed;
+    address private s_ethUsdPriceFeedAddress;
+    MockV3Aggregator private s_ethUsdPriceFeed;
     address private s_weth;
     uint256 private s_amountDscToMintInUsd; // 5 ether in usd
+    uint256 private s_amountToBurn; // s_amountDscToMintInUsd / 2
     uint256 private s_collateralValueInUsd; // 10 ether in usd
     uint256 private s_expectedHealthFactor; // 10 ether in usd
 
@@ -53,12 +58,18 @@ contract DSCEngineTest is Test {
 
     function setUp() public {
         deployer = new DeployDSC();
+
         (dsc, engine, config) = deployer.run();
-        (s_weth,, s_ethUsdPriceFeed,) = config.activeNetworkConfig();
+        (s_weth,, s_ethUsdPriceFeedAddress,) = config.activeNetworkConfig();
+        s_ethUsdPriceFeed = MockV3Aggregator(s_ethUsdPriceFeedAddress);
+
         ERC20Mock(s_weth).mint(USER, AMOUNT_COLLATERAL);
+
         s_amountDscToMintInUsd = engine.getUsdValue(s_weth, AMOUNT_TO_MINT_IN_WETH);
         s_collateralValueInUsd = engine.getUsdValue(s_weth, AMOUNT_COLLATERAL);
         s_expectedHealthFactor = engine.getUsdValue(s_weth, AMOUNT_COLLATERAL);
+
+        s_amountToBurn = s_amountDscToMintInUsd / 2;
     }
 
     //////////////////////////////////////
@@ -69,8 +80,8 @@ contract DSCEngineTest is Test {
 
     function testRevertsIfTokenLengthDoesntMatchPriceFeeds() public {
         s_tokenAddresses.push(s_weth);
-        s_priceFeedAddresses.push(s_ethUsdPriceFeed);
-        s_priceFeedAddresses.push(s_ethUsdPriceFeed);
+        s_priceFeedAddresses.push(s_ethUsdPriceFeedAddress);
+        s_priceFeedAddresses.push(s_ethUsdPriceFeedAddress);
         vm.expectRevert(DSCEngine__TokenAddressesAndPriceFeedAddressesMustBeSameLength.selector);
         new DSCEngine(s_tokenAddresses, s_priceFeedAddresses, address(dsc));
     }
@@ -210,5 +221,68 @@ contract DSCEngineTest is Test {
         uint256 endingWethCollateralBalance = engine.getCollateralBalanceOfUser(USER, s_weth);
 
         assertEq(endingWethCollateralBalance, expectedWethCollateralBalance);
+    }
+
+    //////////////////////////////////////
+    // burnDSC Tests                    //
+    //////////////////////////////////////
+    function testBurnDsc() public approved deposited minted {
+        uint256 totalDscMinted = engine.getDSCBalanceOfUser(USER);
+        assertEq(totalDscMinted, s_amountDscToMintInUsd);
+
+        uint256 amountToBurn = totalDscMinted / 2;
+        uint256 expectedDscBalance = totalDscMinted - amountToBurn;
+
+        vm.startPrank(USER);
+        IERC20(address(dsc)).approve(address(engine), amountToBurn);
+        engine.burnDsc(amountToBurn);
+        vm.stopPrank();
+
+        uint256 endingDscBalance = engine.getDSCBalanceOfUser(USER);
+        assertEq(expectedDscBalance, endingDscBalance);
+    }
+
+    //////////////////////////////////////
+    // redeemCollateralAndBurnDsc Tests //
+    //////////////////////////////////////
+    function testRedeemCollateralAndBurnDsc() public approved deposited minted {
+        uint256 startingCollateralBalance = engine.getCollateralBalanceOfUser(USER, s_weth);
+
+        uint256 expectedDscBalance = s_amountDscToMintInUsd - s_amountToBurn;
+        uint256 expectedDscBalanceInWeth = engine.getTokenAmountFromUsd(s_weth, expectedDscBalance);
+
+        uint256 maxCollateralToRedeem = (startingCollateralBalance / 2) - expectedDscBalanceInWeth;
+        uint256 expectedCollateralBalance = startingCollateralBalance - maxCollateralToRedeem;
+
+        vm.startPrank(USER);
+        IERC20(address(dsc)).approve(address(engine), s_amountToBurn);
+        engine.redeemCollateralForDsc(s_weth, maxCollateralToRedeem, s_amountToBurn);
+        vm.stopPrank();
+
+        uint256 endingDscBalance = engine.getDSCBalanceOfUser(USER);
+        uint256 endingCollateralBalance = engine.getCollateralBalanceOfUser(USER, s_weth);
+        assertEq(expectedDscBalance, endingDscBalance);
+        assertEq(endingCollateralBalance, expectedCollateralBalance);
+    }
+
+    //////////////////////////////////////
+    // liquidate Tests                  //
+    //////////////////////////////////////
+    function testLiquidateFailsWhenUserHealthFactorIsOk() public approved deposited minted {
+        vm.expectRevert(DSCEngine__HealthFactorOk.selector);
+        engine.liquidate(s_weth, USER, s_amountDscToMintInUsd);
+    }
+
+    function testLiquidateFailsWhenHealthFactorIsNotImproved() public approved deposited minted {
+        int256 newPrice = 500e8;
+        s_ethUsdPriceFeed.updateAnswer(newPrice);
+        uint256 startingUserHealthFactor = engine.getUserHealthFactor(USER);
+        console.log(startingUserHealthFactor);
+
+        // vm.expectRevert(DSCEngine__HealthFactorNotImproved.selector);
+        engine.liquidate(s_weth, USER, s_amountToBurn);
+
+        uint256 endingUserHealthFactor = engine.getUserHealthFactor(USER);
+        console.log(startingUserHealthFactor, endingUserHealthFactor);
     }
 }
