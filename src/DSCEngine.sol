@@ -159,7 +159,6 @@ contract DSCEngine is ReentrancyGuard {
         nonReentrant
     {
         s_collateralDeposited[msg.sender][_tokenCollateralAddress] += _amountCollateral;
-        console.log("Amount deposited: ", s_collateralDeposited[msg.sender][_tokenCollateralAddress]);
         emit CollateralDeposited(msg.sender, _tokenCollateralAddress, _amountCollateral);
         bool sucess = IERC20(_tokenCollateralAddress).transferFrom(msg.sender, address(this), _amountCollateral);
         if (!sucess) {
@@ -212,7 +211,7 @@ contract DSCEngine is ReentrancyGuard {
     }
 
     /**
-     * @param _colateral The address of the erc20 collateral address to liquidate from the user
+     * @param _collateral The address of the erc20 collateral address to liquidate from the user
      * @param _user The user who has broken the health factor. Their _healthFactor should be below MIN_HEALTH_FACTOR
      * @param _debtToCover The amount of DSC you want to burn to improve the users health factor
      * @notice You can partially liquidate a user.
@@ -223,7 +222,7 @@ contract DSCEngine is ReentrancyGuard {
      *
      * Follows CEI: Checks, Effects, Interactions
      */
-    function liquidate(address _colateral, address _user, uint256 _debtToCover)
+    function liquidate(address _collateral, address _user, uint256 _debtToCover)
         external
         moreThanZero(_debtToCover)
         nonReentrant
@@ -238,21 +237,19 @@ contract DSCEngine is ReentrancyGuard {
         // And take their collateral.
         // Bad user: $140 ETH, $100 DSC
         // _debtToCover = $100
-        uint256 tokenAmountFromDebtCovered = getTokenAmountFromUsd(_colateral, _debtToCover);
+        uint256 tokenAmountFromDebtCovered = getTokenAmountFromUsd(_collateral, _debtToCover);
         // And give them a 10% bonus
         // So we are giving the liquidator $110 of WETH for 100 DSC
         // We should implement a feature to liquidate in the event the protocol is insolvent
         // And sweep extra amounts into a treasury
         uint256 bonusCollateral = (tokenAmountFromDebtCovered * LIQUIDATION_BONUS) / LIQUIDATION_PRECISION;
         uint256 totalCollateralToRedeem = tokenAmountFromDebtCovered + bonusCollateral;
-        console.log("totalCollateralToRedeem: ", totalCollateralToRedeem);
-        console.log("collateralInBalance: ", s_collateralDeposited[_user][_colateral]);
-        console.log("Passou");
+
+        _redeemCollateral(_user, msg.sender, _collateral, totalCollateralToRedeem);
         _burnDsc(_debtToCover, _user, msg.sender);
-        _redeemCollateral(_user, msg.sender, _colateral, totalCollateralToRedeem);
 
         uint256 endingUserHealthFactor = _healthFactor(_user);
-        if (endingUserHealthFactor <= startingUserHealthFactor) {
+        if (endingUserHealthFactor <= MIN_HEALTH_FACTOR) {
             revert DSCEngine__HealthFactorNotImproved();
         }
         _revertIfHealthFactorIsBroken(msg.sender);
@@ -261,9 +258,6 @@ contract DSCEngine is ReentrancyGuard {
     //////////////////////////////////////
     // Private & Internal View Functions//
     //////////////////////////////////////
-    /**
-     * @dev Low-level internal function, do not call unless the function calling it is checking for health factors being broken
-     */
     function _calculateHealthFactor(uint256 _totalDscMinted, uint256 _collateralValueInUsd)
         internal
         pure
@@ -274,10 +268,13 @@ contract DSCEngine is ReentrancyGuard {
         return collateralAdjustedForThreshold._convertToPrecisionValue() / _totalDscMinted;
     }
 
+    /**
+     *
+     * @dev Low-level internal function, do not call unless the function calling it is checking for health factors being broken
+     */
     function _burnDsc(uint256 _amountDscToBurn, address _onBehalfOf, address _dscFrom) private {
         s_DSCMinted[_onBehalfOf] -= _amountDscToBurn;
         bool sucess = i_dsc.transferFrom(_dscFrom, address(this), _amountDscToBurn);
-        console.log("chegou aqui");
         // This conditional is hypothetically unreachable
         if (!sucess) {
             revert DSCEngine__TransferFailed();

@@ -25,10 +25,12 @@ contract DSCEngineTest is Test {
     HelperConfig public config;
 
     address private constant USER = address(1);
+    address private constant LIQUIDATOR = address(2); // Liquidator has 10 times more collateral than the user
     uint256 private constant AMOUNT_COLLATERAL = 10 ether;
     uint256 private constant AMOUNT_TO_MINT_IN_WETH = 2 ether;
     uint256 private constant STARTING_ERC20_BALANCE = 10 ether;
     uint256 private constant PRECISION = 1e18;
+    uint256 private constant MIN_HEALTH_FACTOR = 1e18;
 
     address private s_ethUsdPriceFeedAddress;
     MockV3Aggregator private s_ethUsdPriceFeed;
@@ -64,6 +66,7 @@ contract DSCEngineTest is Test {
         s_ethUsdPriceFeed = MockV3Aggregator(s_ethUsdPriceFeedAddress);
 
         ERC20Mock(s_weth).mint(USER, AMOUNT_COLLATERAL);
+        ERC20Mock(s_weth).mint(LIQUIDATOR, AMOUNT_COLLATERAL * 10);
 
         s_amountDscToMintInUsd = engine.getUsdValue(s_weth, AMOUNT_TO_MINT_IN_WETH);
         s_collateralValueInUsd = engine.getUsdValue(s_weth, AMOUNT_COLLATERAL);
@@ -274,15 +277,38 @@ contract DSCEngineTest is Test {
     }
 
     function testLiquidateFailsWhenHealthFactorIsNotImproved() public approved deposited minted {
-        int256 newPrice = 500e8;
+        int256 newPrice = 200e8;
         s_ethUsdPriceFeed.updateAnswer(newPrice);
         uint256 startingUserHealthFactor = engine.getUserHealthFactor(USER);
-        console.log(startingUserHealthFactor);
 
-        // vm.expectRevert(DSCEngine__HealthFactorNotImproved.selector);
+        vm.startPrank(LIQUIDATOR);
+        ERC20Mock(s_weth).approve(address(engine), AMOUNT_COLLATERAL * 10);
+        dsc.approve(address(engine), s_amountToBurn);
+        engine.depositCollateral(s_weth, AMOUNT_COLLATERAL * 10);
+        engine.mintDsc(s_amountDscToMintInUsd * 2);
+        vm.expectRevert(DSCEngine__HealthFactorNotImproved.selector);
         engine.liquidate(s_weth, USER, s_amountToBurn);
+        vm.stopPrank();
 
         uint256 endingUserHealthFactor = engine.getUserHealthFactor(USER);
         console.log(startingUserHealthFactor, endingUserHealthFactor);
+    }
+
+    function testLiquidateImprovesUserHealthFactor() public approved deposited minted {
+        int256 newPrice = 500e8;
+        s_ethUsdPriceFeed.updateAnswer(newPrice);
+        uint256 startingUserHealthFactor = engine.getUserHealthFactor(USER);
+
+        vm.startPrank(LIQUIDATOR);
+        ERC20Mock(s_weth).approve(address(engine), AMOUNT_COLLATERAL * 10);
+        dsc.approve(address(engine), s_amountToBurn);
+        engine.depositCollateral(s_weth, AMOUNT_COLLATERAL * 10);
+        engine.mintDsc(s_amountDscToMintInUsd * 2);
+        engine.liquidate(s_weth, USER, s_amountToBurn);
+        vm.stopPrank();
+
+        uint256 endingUserHealthFactor = engine.getUserHealthFactor(USER);
+        assert(endingUserHealthFactor > startingUserHealthFactor);
+        assert(endingUserHealthFactor > MIN_HEALTH_FACTOR);
     }
 }
