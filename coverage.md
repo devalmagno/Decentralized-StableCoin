@@ -1,11 +1,20 @@
-Compiling 46 files with Solc 0.8.26
-Solc 0.8.26 finished in 2.04s
+Compiling 47 files with Solc 0.8.26
+Solc 0.8.26 finished in 2.17s
 Compiler run successful with warnings:
 Warning (3420): Source file does not specify required compiler version! Consider adding "pragma solidity ^0.8.26;"
 --> test/fuzz/OpenInvariantTest.t.sol
 
 Analysing contracts...
 Running tests...
+
+Ran 6 tests for test/unit/DecentralizedStableCoinTest.t.sol:DecentralizedStableCoinTest
+[PASS] testBurnFailsWhenAmountIsLessOrEqualToZero() (gas: 13560)
+[PASS] testBurnFailsWhenBalanceIsLessThanAmountToBurn() (gas: 13584)
+[PASS] testDecentralizedStableCoinIsInitializedCorrectly() (gas: 19527)
+[PASS] testMintAndBurnDsc() (gas: 71328)
+[PASS] testMintFailsWhenAddressZero() (gas: 11920)
+[PASS] testMintFailsWhenAmountToMintIsZero() (gas: 11941)
+Suite result: ok. 6 passed; 0 failed; 0 skipped; finished in 1.15ms (1.62ms CPU time)
 
 Ran 20 tests for test/unit/DSCEngineTest.t.sol:DSCEngineTest
 [PASS] testBurnDsc() (gas: 273493)
@@ -28,23 +37,23 @@ Ran 20 tests for test/unit/DSCEngineTest.t.sol:DSCEngineTest
 [PASS] testUserCanMintDsc() (gas: 228217)
 [PASS] testUserCanRedeemCollateralWhenDSCBalanceIsZero() (gas: 138609)
 [PASS] testUserCanRedeemCollateralWhenDscBalanceIsNotZero() (gas: 264729)
-Suite result: ok. 20 passed; 0 failed; 0 skipped; finished in 8.90ms (45.00ms CPU time)
+Suite result: ok. 20 passed; 0 failed; 0 skipped; finished in 8.86ms (43.13ms CPU time)
 
 Ran 2 tests for test/fuzz/InvariantTest.t.sol:InvariantTest
 [PASS] invariant__gettersShouldNotRevert() (runs: 128, calls: 16384, reverts: 0)
 [PASS] invariant__protocolMustHaveMoreValueThanTotalSupply() (runs: 128, calls: 16384, reverts: 0)
-Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 45.67s (75.60s CPU time)
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 46.10s (76.42s CPU time)
 
-Ran 2 test suites in 45.67s (45.68s CPU time): 22 tests passed, 0 failed, 0 skipped (22 total tests)
+Ran 3 test suites in 46.11s (46.11s CPU time): 28 tests passed, 0 failed, 0 skipped (28 total tests)
 | File                             | % Lines          | % Statements     | % Branches     | % Funcs         |
 |----------------------------------|------------------|------------------|----------------|-----------------|
 | script/DeployDSC.s.sol           | 100.00% (10/10)  | 100.00% (14/14)  | 100.00% (0/0)  | 100.00% (1/1)   |
 | script/HelperConfig.s.sol        | 0.00% (0/15)     | 0.00% (0/19)     | 0.00% (0/3)    | 0.00% (0/3)     |
 | src/DSCEngine.sol                | 91.14% (72/79)   | 93.14% (95/102)  | 45.45% (5/11)  | 100.00% (26/26) |
-| src/DecentralizedStableCoin.sol  | 66.67% (8/12)    | 69.23% (9/13)    | 0.00% (0/4)    | 66.67% (2/3)    |
+| src/DecentralizedStableCoin.sol  | 100.00% (12/12)  | 100.00% (13/13)  | 100.00% (4/4)  | 100.00% (3/3)   |
 | src/libraries/OracleLib.sol      | 100.00% (5/5)    | 85.71% (6/7)     | 0.00% (0/1)    | 100.00% (1/1)   |
 | src/libraries/PriceConverter.sol | 100.00% (10/10)  | 100.00% (17/17)  | 100.00% (0/0)  | 100.00% (4/4)   |
 | test/fuzz/Handler.t.sol          | 90.32% (56/62)   | 91.03% (71/78)   | 100.00% (6/6)  | 85.71% (6/7)    |
 | test/mocks/ERC20Mock.sol         | 50.00% (1/2)     | 50.00% (1/2)     | 100.00% (0/0)  | 66.67% (2/3)    |
 | test/mocks/MockV3Aggregator.sol  | 41.18% (7/17)    | 41.18% (7/17)    | 100.00% (0/0)  | 33.33% (2/6)    |
-| Total                            | 79.72% (169/212) | 81.78% (220/269) | 44.00% (11/25) | 81.48% (44/54)  |
+| Total                            | 81.60% (173/212) | 83.27% (224/269) | 60.00% (15/25) | 83.33% (45/54)  |
