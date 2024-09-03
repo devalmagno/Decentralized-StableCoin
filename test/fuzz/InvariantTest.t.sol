@@ -52,7 +52,7 @@ contract InvariantTest is StdInvariant, Test {
         assert(totalValue >= totalSupply);
     }
 
-    function invariant__gettersShouldNotRevert() public view {
+    function invariant__dscEngineGettersShouldNotRevert() public view {
         engine.getAccountCollateralValue(msg.sender);
         engine.getAccountInformation(msg.sender);
         engine.getCollateralBalanceOfUser(msg.sender, weth);
@@ -64,5 +64,12 @@ contract InvariantTest is StdInvariant, Test {
         engine.getPriceFeed(address(weth));
         engine.getPriceFeed(address(wbtc));
         engine.getUserHealthFactor(msg.sender);
+    }
+
+    function invariant__helperConfigGettersShouldNotRevert() public {
+        config.getAnvilEthConfig();
+        config.getSepoliaEthConfig();
+        config.getAnvilEthConfigAttributes();
+        config.getSepoliaEthConfigAttributes();
     }
 }

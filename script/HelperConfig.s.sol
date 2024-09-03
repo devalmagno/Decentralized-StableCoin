@@ -21,13 +21,13 @@ contract HelperConfig is Script {
 
     constructor() {
         if (block.chainid == 11155111) {
-            activeNetworkConfig = getSepoliaEthConfig();
+            activeNetworkConfig = _getSepoliaEthConfig();
         } else {
-            activeNetworkConfig = getOrCreateAnvilEthConfig();
+            activeNetworkConfig = _getOrCreateAnvilEthConfig();
         }
     }
 
-    function getSepoliaEthConfig() public pure returns (NetworkConfig memory) {
+    function _getSepoliaEthConfig() private pure returns (NetworkConfig memory) {
         NetworkConfig memory config = NetworkConfig({
             weth: 0xdd13E55209Fd76AfE204dBda4007C227904f0a81,
             wbtc: 0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063,
@@ -38,7 +38,7 @@ contract HelperConfig is Script {
         return config;
     }
 
-    function getOrCreateAnvilEthConfig() public returns (NetworkConfig memory) {
+    function _getOrCreateAnvilEthConfig() private returns (NetworkConfig memory) {
         if (activeNetworkConfig.ethPriceFeed != address(0)) {
             return activeNetworkConfig;
         }
@@ -58,5 +58,36 @@ contract HelperConfig is Script {
         });
 
         return config;
+    }
+
+    function getSepoliaEthConfig() public pure returns (NetworkConfig memory) {
+        return _getSepoliaEthConfig();
+    }
+
+    function getSepoliaEthConfigAttributes()
+        public
+        pure
+        returns (address weth, address wbtc, address ethPriceFeed, address btcPriceFeed)
+    {
+        NetworkConfig memory config = _getSepoliaEthConfig();
+        weth = config.weth;
+        wbtc = config.wbtc;
+        ethPriceFeed = config.ethPriceFeed;
+        btcPriceFeed = config.btcPriceFeed;
+    }
+
+    function getAnvilEthConfig() public returns (NetworkConfig memory) {
+        return _getOrCreateAnvilEthConfig();
+    }
+
+    function getAnvilEthConfigAttributes()
+        public
+        returns (address weth, address wbtc, address ethPriceFeed, address btcPriceFeed)
+    {
+        NetworkConfig memory config = _getOrCreateAnvilEthConfig();
+        weth = config.weth;
+        wbtc = config.wbtc;
+        ethPriceFeed = config.ethPriceFeed;
+        btcPriceFeed = config.btcPriceFeed;
     }
 }
